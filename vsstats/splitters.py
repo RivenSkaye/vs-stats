@@ -28,6 +28,12 @@ def split_resolutions(
     if resolution is not None:
         if not isinstance(resolution, Resolution):
             resolution = Resolution(resolution[0], resolution[1])
+        if clip.width == resolution.width and clip.height == resolution.height:
+            return [clip]
+        elif clip.width == resolution.height and clip.height == resolution.width:
+            return[clip.std.Transpose()]
+    elif clip.width and clip.height:
+        return [clip]
 
     reslist: List[vs.VideoNode] = []
     storeclip: Optional[vs.VideoNode] = None
@@ -36,7 +42,7 @@ def split_resolutions(
         f: vs.VideoFrame, n: int,
         res: Optional[Resolution] = None
     ) -> vs.VideoFrame:
-        """Function for use in a frame eval that sorts chunks of clip by their resolution"""
+        """Function for use in a frame eval that splits chunks of clip by their resolution"""
         nonlocal reslist
         nonlocal storeclip
 
