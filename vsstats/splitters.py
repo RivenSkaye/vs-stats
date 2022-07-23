@@ -7,8 +7,13 @@ from vsutil import frame2clip
 import vapoursynth as vs
 
 from .types import Resolution
+from ._helpers import _get_res
 
 core = vs.core
+
+__all__ = [
+    "split_resolutions", "split_formats"
+]
 
 
 def split_resolutions(
@@ -23,25 +28,24 @@ def split_resolutions(
 
     Splits a variable resolution input clip into a list of each of its resolutions.
     Optionally filters the results to only match a certain resolution.
+    Optionally applies a function on the resulting constant resolution clips.
+    When supplying a resolution to match, this function returns ``None`` if no
+    matching clips were found
 
     :param clip:            The variable resolution clip to split.
     :param resolution:      None to return all clips, or a :py:class:`Resolution` or another
                             ``Sequence`` that contains integers describing the desired width
                             or height, alternatively provide the ``width`` and ``height`` kwargs.
+    :param filterfunc:      Optional function to apply to all clips before returning.
     :param width:           Keyword-only argument, specify the width of the resolution to return.
     :param height:          Keyword-only argument, specify the height of the resolution to return.
     """
-    if resolution is not None or (width is not None or height is not None):
-        if resolution is None:
-            if (width is None or height is None):
-                raise ValueError("split_resolutions: When selecting only a single resolution, "
-                                 "provide either a Resolution or both width AND height!")
-            else:
-                resolution = Resolution(width, height)
-        if not isinstance(resolution, Resolution):
-            resolution = Resolution(resolution[0], resolution[1])
+    resolution = _get_res(resolution, width, height, "split_resolutions")
+    # If the clip matches, return it
+    if resolution is not None:
         if clip.width == resolution.width and clip.height == resolution.height:
             return [clip]
+        # :kekw:
         elif clip.width == resolution.height and clip.height == resolution.width:
             return[clip.std.Transpose()]
     elif clip.width and clip.height:
@@ -84,10 +88,64 @@ def split_resolutions(
     return None if len(reslist) == 0 else reslist
 
 
-def split_formats(clip: vs.VideoNode, format: vs.VideoFormat) -> Optional[List[vs.VideoNode]]:
+def split_formats(
+    clip: vs.VideoNode,
+    videoformat: Union[vs.VideoFormat, vs.VideoNode, None],
+    filterfunc: Optional[Callable[[vs.VideoNode], vs.VideoNode]]
+) -> Optional[List[vs.VideoNode]]:
     """
     Split a variable format clip by format.
 
     Splits a variable format input clip into a list of each of its formats.
-    Optionally filters the results to only match a certain resolution.
+    Optionally filters the results to only match a certain format.
+    Optionally applies a function on the resulting constant format clips.
+    When supplying a format to match, this function returns ``None`` if no matching
+    formats were found.
+
+    :param clip:            the clip to split
+    :param videoformat:     Optional, the format to match, will return only matching clips.
+                            This can be gotten from either a clip or a frame, the ``format``
+                            property. It's easiest to get this off a reference clip or off
+                            a single-frame splice, e.g. ``(clip[20]).format`` should work.
+                            You can also pass an entire clip for extraction, but that might
+                            yield None, causing the function to return all clips.
+    :param filterfunc:      A function to apply to all filtered clips before returning.
     """
+    if isinstance(videoformat, vs.VideoNode):
+        videoformat = videoformat.format
+
+    formatlist: List[vs.VideoNode] = []
+    storeclip: Optional[vs.VideoNode] = None
+
+    def _eval(
+        f: vs.VideoFrame, n: int,
+        fmt: Optional[vs.VideoFormat]
+    ) -> vs.VideoFrame:
+        """Eval function for splitting things by format"""
+        nonlocal formatlist
+        nonlocal storeclip
+
+        if fmt is not None and f.format != fmt:
+            if storeclip is not None:
+                formatlist.append(storeclip)
+                storeclip = None
+            return f
+
+        fc = frame2clip(f)
+        if storeclip is None:
+            storeclip = fc
+            return f
+
+        if storeclip.format != f.format:
+            formatlist.append(storeclip)
+            storeclip = fc
+        else:
+            storeclip += fc
+
+        return f
+
+    evalfunc = partial(_eval, fmt=videoformat)
+    clip.std.FrameEval(evalfunc)
+
+    formatlist = [filterfunc(fmt) for fmt in formatlist] if filterfunc is not None else formatlist
+    return None if len(formatlist) == 0 else formatlist
