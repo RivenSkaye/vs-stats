@@ -1,4 +1,7 @@
-from typing import Any, NamedTuple, Type, TypeVar, get_args
+from dataclasses import dataclass
+from typing import Any, Callable, NamedTuple, Type, TypeVar, Union, get_args
+
+import vapoursynth as vs
 
 
 class EnforceTypes:
@@ -8,7 +11,7 @@ class EnforceTypes:
     MISSING = _MISSING()
     T = TypeVar("T")
 
-    def __init__(self, cls: Type[T]):
+    def __init__(self, cls: Union[Type[T], Callable]):
         self.cls = cls
         self.keywords = cls.__annotations__
 
@@ -41,3 +44,55 @@ class Resolution(NamedTuple):
 
     def __repr__(self) -> str:
         return f"{self.width}x{self.height}"
+
+
+@EnforceTypes
+@dataclass
+class Subclip:
+    """A class to define a constant format and/or framerate subclip.
+
+    This dataclass exposes a simple API to store the information about a constant format and/or
+    framerate section of a clip, and an easy way to retrieve that section of video with the
+    proper values set.
+    """
+    clip: vs.VideoNode
+    fmt: int
+    fpsnum: int
+    fpsden: int
+    start: int
+    end: int
+
+    def __init__(
+        self,
+        clip: vs.VideoNode,
+        fmt: Union[vs.VideoFormat, int],
+        fpsnum: int,
+        fpsden: int,
+        start: int,
+        end: int
+    ):
+        """
+        :param clip:        The ``vs.VideoNode`` this Subclip is a part of.
+        :param fmt:         The ``vs.VideoFormat`` or its ``id`` to apply to the subclip.
+                            This cannot be retrieved from ``clip`` as that's supposed to be
+                            variable format, thus presenting the format as ``None`` when checked.
+        :param fpsnum:      fps numerator (24000 for 23.976).
+        :param fpsden:      fps denominator (1001 for 23.976).
+        :param start:       The index where this section starts. Zero-indexed like slice notation.
+        :param end:         The index where this section ends. One-indexed liked slice notation.
+        """
+        if start >= end:
+            raise ValueError("The start of a subclip cannot be after its end!")
+        self.clip = clip
+        self.fmt = fmt.id if isinstance(fmt, vs.VideoFormat) else fmt
+        self.fpsnum = fpsnum
+        self.fpsden = fpsden
+        self.start = start
+        self.end = end
+
+    @property
+    def trim(self) -> vs.VideoNode:
+        """Trims the videonode and sets the specified framerate and format."""
+        c = self.clip[self.start:self.end]
+        c = c.std.AssumeFPS(fpsnum=self.fpsnum, fpsden=self.fpsden)
+        return c.resize.Bicubic(format=self.fmt)
