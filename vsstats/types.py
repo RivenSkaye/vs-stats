@@ -1,7 +1,7 @@
 from typing import Any, NamedTuple, Type, TypeVar, get_args
 
 
-class _EnforceTypes:
+class EnforceTypes:
     """A class for use as class decorator. Enforces types in ``init``"""
     class _MISSING:
         pass
@@ -33,7 +33,7 @@ class _EnforceTypes:
         return self.cls(*arglist, **kwargs)
 
 
-@_EnforceTypes
+@EnforceTypes
 class Resolution(NamedTuple):
     """A simple object representing a frame or video resolution."""
     width: int
