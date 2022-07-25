@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any, Callable, NamedTuple, Type, TypeVar, Union, get_args
 
 import vapoursynth as vs
@@ -57,17 +58,19 @@ class Subclip:
     """
     clip: vs.VideoNode
     fmt: int
-    fpsnum: int
-    fpsden: int
+    fps_num: int
+    fps_den: int
     start: int
     end: int
+    _w: int = 0
+    _h: int = 0
 
     def __init__(
         self,
         clip: vs.VideoNode,
         fmt: Union[vs.VideoFormat, int],
-        fpsnum: int,
-        fpsden: int,
+        fps_num: int,
+        fps_den: int,
         start: int,
         end: int
     ):
@@ -85,8 +88,8 @@ class Subclip:
             raise ValueError("The start of a subclip cannot be after its end!")
         self.clip = clip
         self.fmt = fmt.id if isinstance(fmt, vs.VideoFormat) else fmt
-        self.fpsnum = fpsnum
-        self.fpsden = fpsden
+        self.fps_num = fps_num
+        self.fps_den = fps_den
         self.start = start
         self.end = end
 
@@ -94,5 +97,23 @@ class Subclip:
     def trim(self) -> vs.VideoNode:
         """Trims the videonode and sets the specified framerate and format."""
         c = self.clip[self.start:self.end]
-        c = c.std.AssumeFPS(fpsnum=self.fpsnum, fpsden=self.fpsden)
+        c = c.std.AssumeFPS(fpsnum=self.fps_num, fpsden=self.fps_den)
         return c.resize.Bicubic(format=self.fmt)
+
+    @property
+    def width(self) -> int:
+        self._w = self.clip.width
+        return self._w if self._w > 0 else self.clip.get_frame(self.start).width
+
+    @property
+    def height(self) -> int:
+        self._h = self.clip.height
+        return self._h if self._h > 0 else self.clip.get_frame(self.start).height
+
+    @property
+    def fps(self) -> float:
+        return self.fps_num / self.fps_den
+
+    @property
+    def fps_fraction(self) -> Fraction:
+        return Fraction(self.fps_num, self.fps_den)
