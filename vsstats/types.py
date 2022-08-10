@@ -1,6 +1,6 @@
 from fractions import Fraction
 from functools import cached_property
-from typing import NamedTuple, Optional, TypeVar, Union
+from typing import Generator, NamedTuple, Optional, TypeVar, Union
 from EnforceTypes import classtypes
 
 import vapoursynth as vs
@@ -66,7 +66,13 @@ class Subclip:
         self.fps_den = fps_den
         self.start = start
         self.end = end
-        self.resolution = resolution or Resolution(0, 0)
+        if resolution is None:
+            c = clip.get_frame(start)
+            w = c.width
+            h = c.height
+            c.close()
+            resolution = Resolution(w, h)
+        self.resolution = resolution
 
     def get_frame(self, n: int = 0) -> vs.VideoFrame:
         """
@@ -84,6 +90,17 @@ class Subclip:
                              f"frames! Provide a number between {self.start} and "
                              f"{self.start + framecount - 1}")
         return self.clip.get_frame(n)
+
+    def frames(
+        self,
+        prefetch: Optional[int] = None,
+        backlog: Optional[int] = None,
+        close: bool = False
+    ) -> Generator[vs.VideoFrame, None, None]:
+        """This is the same as calling ``Subclip.trim.frames()`` with the same arguments."""
+        clip = self.trim
+        for frame in clip.frames(prefetch, backlog, close):
+            yield frame
 
     def is_mismatch(self, other: Union[vs.VideoNode, vs.VideoFrame, "Subclip"]) -> bool:
         """
@@ -110,6 +127,7 @@ class Subclip:
         assert isinstance(other, vs.VideoFrame)
 
         otherfps: float = other.props.get("_DurationNum", 0) / other.props.get("_DurationDen", 1)  # type: ignore  # noqa: E501
+        other.close()
         return (
             self.fps == otherfps and
             self.fmt == other.format.id and
@@ -126,32 +144,10 @@ class Subclip:
 
     @cached_property
     def width(self) -> int:
-        if self.resolution.width == 0:
-            rh = self.resolution.height
-            ch = self.clip.height
-            f = self.clip.get_frame(self.start)
-            if self.clip.width != 0:
-                height = rh if rh > 0 else ch if ch > 0 else f.height
-                self.resolution = Resolution(self.clip.width, height)
-            else:
-                height = rh if rh > 0 else ch if ch > 0 else f.height
-                self.resolution = Resolution(f.width, height)
-            f.close()
         return self.resolution.width
 
     @cached_property
     def height(self) -> int:
-        if self.resolution.height == 0:
-            rw = self.resolution.width
-            cw = self.clip.width
-            f = self.clip.get_frame(self.start)
-            if self.clip.height != 0:
-                width = rw if rw > 0 else cw if cw > 0 else f.width
-                self.resolution = Resolution(width, self.clip.height)
-            else:
-                width = rw if rw > 0 else cw if cw > 0 else f.width
-                self.resolution = Resolution(width, f.height)
-            f.close()
         return self.resolution.width
 
     @cached_property
