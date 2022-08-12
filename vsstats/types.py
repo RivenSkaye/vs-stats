@@ -6,10 +6,11 @@ from EnforceTypes import classtypes
 import vapoursynth as vs
 
 __all__ = [
-    "Resolution", "Subclip"
+    "Resolution", "Subclip", "SC"
 ]
 
 SC = TypeVar("SC", bound="Subclip")
+SC.__doc__ = "TypeVar for the :py:class:`Subclip` class, evaluated at runtime"
 
 
 @classtypes
