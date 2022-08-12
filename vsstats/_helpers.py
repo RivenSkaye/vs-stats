@@ -2,6 +2,10 @@ from typing import Optional, Sequence, Union
 
 from .types import Resolution
 
+__all__ = [
+    "_get_res"
+]
+
 
 def _get_res(
     res: Union[Resolution, Sequence, None] = None,
