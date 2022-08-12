@@ -96,14 +96,26 @@ def split_resolutions(
                 f.props.get("_DurationDen", 1),  # type: ignore  # always an int
                 n,
                 n + 1,
-                _get_res(resolution)
+                Resolution(f.width, f.height)
             )
             return f
 
         if f.width != curclip.width or f.height != curclip.height:
             curclip.end = n
-        if n == clip.num_frames:
+            reslist.append(curclip)
+            curclip = Subclip(
+                clip,
+                f.format.id,
+                f.props.get("_DurationNum", 0),  # type: ignore  # always an int
+                f.props.get("_DurationDen", 1),  # type: ignore  # always an int
+                n,
+                n + 1,
+                Resolution(f.width, f.height)
+            )
+        else:
             curclip.end = n
+        if n == clip.num_frames:
+            reslist.append(curclip)
 
         return f
 
@@ -123,9 +135,9 @@ def split_resolutions(
 
 def split_formats(
     clip: vs.VideoNode,
-    videoformat: Union[vs.VideoFormat, vs.VideoNode, None],
-    filterfunc: Optional[Callable[[vs.VideoNode], vs.VideoNode]]
-) -> Optional[List[vs.VideoNode]]:
+    videoformat: Union[vs.VideoFormat, vs.VideoNode, int, None] = None,
+    filterfunc: Optional[Callable[[vs.VideoNode], vs.VideoNode]] = None
+) -> Optional[List[Subclip]]:
     """
     Split a variable format clip by format.
 
@@ -146,6 +158,8 @@ def split_formats(
     """
     if isinstance(videoformat, vs.VideoNode):
         videoformat = videoformat.format
+        if videoformat is None:
+            raise TypeError("Passed a variable format clip as reference for format!")
 
     formatlist: List[Subclip] = []
     storeclip: Optional[Subclip] = None
@@ -158,6 +172,7 @@ def split_formats(
         """Eval function for splitting clips by format"""
         nonlocal formatlist
         nonlocal storeclip
+        nonlocal clip
 
         if fmt is not None and f.format != fmt:
             if storeclip is not None:
@@ -165,21 +180,73 @@ def split_formats(
                 storeclip = None
             return f
 
-        fc = frame2clip(f)
         if storeclip is None:
-            storeclip = fc
+            storeclip = Subclip(
+                clip,
+                f.format.id,
+                f.props.get("_DurationNum", 0),  # type: ignore  # always an int
+                f.props.get("_DurationDen", 1),  # type: ignore  # always an int
+                n,
+                n+1,
+                Resolution(f.width, f.height)
+            )
             return f
 
         if storeclip.fmt != f.format.id:
+            storeclip.end = n
             formatlist.append(storeclip)
-            storeclip = fc
+            storeclip = Subclip(
+                clip,
+                f.format.id,
+                f.props.get("_DurationNum", 0),  # type: ignore  # always an int
+                f.props.get("_DurationDen", 1),  # type: ignore  # always an int
+                n,
+                n + 1,
+                Resolution(f.width, f.height)
+            )
         else:
-            storeclip += fc
+            storeclip.end = n
+        if n == clip.num_frames:
+            formatlist.append(storeclip)
 
         return f
 
     evalfunc = partial(_eval, fmt=videoformat)
     clip.std.FrameEval(evalfunc)
 
-    formatlist = [filterfunc(fmt.trim) for fmt in formatlist] if filterfunc is not None else formatlist
+    if filterfunc is not None:
+        filtered = []
+        for fmt in formatlist:
+            filtered.append(filterfunc(fmt.trim))
+        fclip = core.std.Splice(filtered, None)
+        for fmt in formatlist:
+            fmt.clip = fclip
     return None if len(formatlist) == 0 else formatlist
+
+
+def split_mismatch(
+    clip: vs.VideoNode,
+    filterfunc: Optional[Callable[[vs.VideoNode], vs.VideoNode]] = None
+) -> List[Subclip]:
+    """
+    Splits a clip with any variable properties.
+
+    Splits clips with **any** of its properties into a ``list`` of ``Subclip`` instances
+    and optionally applies a filtering function to all resulting clips.
+    This function makes a ``Subclip`` instance for every change in the source clip that would
+    require splicing to use the ``mismatch`` argument. For more information about this, please
+    refer to `the relevant documentation <http://vapoursynth.com/doc/functions/video/splice.html>`_
+    which, at the time of writing, only specifies the ``format`` and ``width`` and ``height``
+    properties as the source of a mismatch.
+    Also look at the documentation and implementation of :py:class:`Subclip` for its the way it
+    checks using the :py:meth:`Subclip.is_mismatch` method.
+
+    :param clip:        The clip to split.
+    :param filterfunc:  The function to apply to all clips resulting from the split.
+    """
+    splitlist: List[Subclip] = []
+    storeclip: Optional[Subclip] = None
+
+    def _eval(f: vs.VideoFrame, n: int) -> vs.VideoFrame:
+        return f
+    return []
