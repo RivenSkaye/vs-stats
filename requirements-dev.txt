@@ -1,0 +1,3 @@
+typing_extensions >= 4.3.0
+vapoursynth >= 59
+EnforceTypes >= 0.0.2
