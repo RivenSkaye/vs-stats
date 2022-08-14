@@ -129,7 +129,7 @@ class Subclip:
 
         otherfps: float = other.props.get("_DurationNum", 0) / other.props.get("_DurationDen", 1)  # type: ignore  # noqa: E501
         other.close()
-        return (
+        return not (
             self.fps == otherfps and
             self.fmt == other.format.id and
             self.width == other.width and
