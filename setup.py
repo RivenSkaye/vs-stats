@@ -22,12 +22,12 @@ setup(
     long_description=readme,
     long_description_content_type='text/markdown',
     project_urls={
-        'Source Code': 'https://github.com/Irrational-Encoding-Wizardry/vs-scale',
-        'Documentation': 'https://vsscale.encode.moe/en/latest/',
+        'Source Code': 'https://github.com/RivenSkaye/vs-stats',
+        'Documentation': 'https://example.com',
         'Contact': 'https://discord.gg/qxTxVJGtst',
     },
     install_requires=reqs,
-    python_requires='>=3.10',
+    python_requires='>=3.8',
     packages=[
         package_name
     ],
