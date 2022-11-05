@@ -78,6 +78,14 @@ def split_resolutions(
         res: Optional[Resolution] = None
     ) -> vs.VideoNode:
         """Function for use in a frame eval that splits chunks of clip by their resolution"""
+        nonlocal filterfunc
+        if filterfunc is None:
+            filterfunc = partial(
+                core.resize.Point,
+                format=f.format,
+                width=f.width,
+                height=f.height
+            )
         nonlocal reslist
         nonlocal curclip
         nonlocal clip
@@ -171,9 +179,19 @@ def split_formats(
         fmt: Optional[vs.VideoFormat]
     ) -> vs.VideoNode:
         """Eval function for splitting clips by format"""
+        nonlocal filterfunc
+        if filterfunc is None:
+            filterfunc = partial(
+                core.resize.Point,
+                format=f.format,
+                width=f.width,
+                height=f.height
+            )
         nonlocal formatlist
         nonlocal storeclip
         nonlocal clip
+
+        clip2 = filterfunc(clip)
         print(f)
         print(n)
 
@@ -181,7 +199,7 @@ def split_formats(
             if storeclip is not None:
                 formatlist.append(storeclip)
                 storeclip = None
-            return clip
+            return clip2
 
         if storeclip is None:
             storeclip = Subclip(
@@ -193,13 +211,13 @@ def split_formats(
                 n+1,
                 Resolution(f.width, f.height)
             )
-            return clip
+            return clip2
 
         if storeclip.fmt != f.format.id:
             storeclip.end = n
             formatlist.append(storeclip)
             storeclip = Subclip(
-                clip,
+                clip2,
                 f.format.id,
                 f.props.get("_DurationNum", 0),  # type: ignore  # always an int
                 f.props.get("_DurationDen", 1),  # type: ignore  # always an int
@@ -212,18 +230,10 @@ def split_formats(
         if n == clip.num_frames:
             formatlist.append(storeclip)
 
-        return clip
+        return clip2
 
     evalfunc = partial(_eval, fmt=videoformat)
     clip = clip.std.FrameEval(evalfunc, clip)
-
-    if filterfunc is not None:
-        filtered: List[vs.VideoNode] = []
-        for fmt in formatlist:
-            filtered.append(filterfunc(fmt.trim))
-        clip = core.std.Splice(filtered, mismatch=True)
-        for fmt in formatlist:
-            fmt.clip = clip
     return (None if len(formatlist) == 0 else formatlist), clip
 
 
@@ -238,9 +248,8 @@ def split_mismatch(
     and optionally applies a filtering function to all resulting clips.
     This function makes a ``Subclip`` instance for every change in the source clip that would
     require splicing to use the ``mismatch`` argument. For more information about this, please
-    refer to `the relevant documentation <http://vapoursynth.com/doc/functions/video/splice.html>`_
-    which, at the time of writing, only specifies the ``format`` and ``width`` and ``height``
-    properties as the source of a mismatch.
+    refer to `the relevant docs <http://vapoursynth.com/doc/functions/video/splice.html>`_.
+    Additionally, it splits variable framerate subclips as well.
     Also look at the documentation and implementation of :py:class:`Subclip` for its the way it
     checks using the :py:meth:`Subclip.is_mismatch` method.
 
@@ -251,6 +260,14 @@ def split_mismatch(
     storeclip: Optional[Subclip] = None
 
     def _eval(n: int, f: vs.VideoFrame) -> vs.VideoNode:
+        nonlocal filterfunc
+        if filterfunc is None:
+            filterfunc = partial(
+                core.resize.Point,
+                format=f.format,
+                width=f.width,
+                height=f.height
+            )
         nonlocal splitlist
         nonlocal storeclip
         nonlocal clip
@@ -281,15 +298,9 @@ def split_mismatch(
             storeclip.end = n
         if n == clip.num_frames:
             splitlist.append(storeclip)
-        return clip
+
+        return filterfunc(clip)
 
     clip = clip.std.FrameEval(_eval, clip)
 
-    if filterfunc is not None:
-        filtered: List[vs.VideoNode] = []
-        for split in splitlist:
-            filtered.append(filterfunc(split.trim))
-        clip = core.std.Splice(filtered, mismatch=True)
-        for split in splitlist:
-            split.clip = clip
     return splitlist
